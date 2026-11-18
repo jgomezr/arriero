@@ -3,7 +3,9 @@ import { Workspace, type DurableObjectStorageLike } from "@cloudflare/computer";
 import { CodemodeBackend } from "@cloudflare/computer/backends/codemode";
 import { createGitClient } from "@cloudflare/computer/git";
 import { createGitModule } from "@cloudflare/computer/modules/git";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { createModels, createProvider } from "@earendil-works/pi-ai/models";
+import { NVIDIA_MODELS } from "@earendil-works/pi-ai/providers/nvidia.models";
 import { createRegistry, Harness } from "@earendil-works/pi-durable";
 import { routeAgentRequest } from "agents";
 import { PiHarness } from "agents/harness/pi";
@@ -13,7 +15,31 @@ import { WebSockets } from "agents/websockets";
 import { PiSessionSockets } from "./sockets";
 import { createWorkspaceTools } from "./workspace";
 
-const MODEL_ID = "@cf/deepseek-ai/deepseek-v4.1-flash-1017";
+// The NVIDIA model new sessions start on. Change this id to switch models.
+const MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b";
+
+// NVIDIA models that pi-ai 1.5.2's bundled catalog does not list yet. They
+// reuse NVIDIA's compat settings with conservative limits; adjust if needed.
+const EXTRA_IDS = [
+  "nvidia/nemotron-3.5-bolt-e4b",
+  "mistralai/mistral-large-4-1t-a52b",
+  "google/gemma-4-31b"
+];
+const catalog = Object.values(NVIDIA_MODELS);
+const template = catalog.find(
+  (m) => m.id === "nvidia/nemotron-3.5-lightning-30b-a3b"
+)!;
+const nvidiaModels = [
+  ...catalog,
+  ...EXTRA_IDS.map((id) => ({
+    ...template,
+    id,
+    name: id,
+    reasoning: false,
+    contextWindow: 128000,
+    maxTokens: 8192
+  }))
+];
 
 const PREAMBLE =
   "You are a concise playground assistant. You have a durable workspace at /workspace: read, write, edit, delete, list (ls), find and grep files there, and run JavaScript modules in it with exec, which can also use git. Paths are absolute. Use tools whenever they can answer the request, and explain their results plainly.";
@@ -22,6 +48,25 @@ const PREAMBLE =
 export class PiAgent extends DurableObject<Env> {
   // Workers AI and AI Gateway over the AI binding, as a pi-ai provider.
   readonly ai = createAI({ binding: this.env.AI });
+  // NVIDIA's OpenAI-compatible endpoint, keyed by the NVIDIA_API_KEY secret.
+  readonly nvidia = createProvider({
+    id: "nvidia",
+    name: "NVIDIA",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    auth: {
+      apiKey: {
+        name: "NVIDIA API key",
+        resolve: async () => ({
+          auth: {
+            apiKey: (this.env as unknown as { NVIDIA_API_KEY: string })
+              .NVIDIA_API_KEY
+          }
+        })
+      }
+    },
+    models: nvidiaModels,
+    api: openAICompletionsApi()
+  });
   // A durable filesystem on the object's SQLite, beside pi's own tables.
   // `exec` runs JavaScript modules in a fresh Dynamic Worker per call, with
   // no network of its own. `git` turns on `workspace.git`, which the `codemode:git`
@@ -49,6 +94,7 @@ export class PiAgent extends DurableObject<Env> {
       });
       const models = createModels();
       models.setProvider(this.ai.provider);
+      models.setProvider(this.nvidia);
       return Harness.open(
         storage,
         {
@@ -65,7 +111,10 @@ export class PiAgent extends DurableObject<Env> {
         context
       );
     },
-    defaults: { model: this.ai(MODEL_ID), thinkingLevel: "low" }
+    defaults: {
+      model: nvidiaModels.find((m) => m.id === MODEL_ID)!,
+      thinkingLevel: "low"
+    }
   });
 
   // App glue, not the harness: how this app puts sessions on a socket.
