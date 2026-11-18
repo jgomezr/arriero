@@ -22,6 +22,13 @@ export type PiToolInfo = {
   readonly description: string;
 };
 
+/** A model the session can switch to, listed in the server's hello. */
+export type PiModelInfo = {
+  readonly provider: string;
+  readonly id: string;
+  readonly name: string;
+};
+
 /** A page of the session's entries, as `session.entries()` returns it. */
 export type PiEntriesPage = Page<EntryRecord, Cursor>;
 
@@ -39,6 +46,13 @@ export type PiClientMessage =
     }
   | { readonly type: "abort"; readonly id?: string }
   | { readonly type: "reset"; readonly id?: string; readonly handoff?: string }
+  /** Change the session's model to one the hello listed (`session.setModel`). */
+  | {
+      readonly type: "setModel";
+      readonly id?: string;
+      readonly provider: string;
+      readonly model: string;
+    }
   /**
    * Watch the session: the server answers with a `view`, then `ops`. Sent
    * each time the socket opens. `from` resumes a transcript the client
@@ -63,6 +77,8 @@ export type PiServerMessage =
       readonly type: "hello";
       readonly session: PiSessionId;
       readonly tools: readonly PiToolInfo[];
+      /** The models the picker offers. */
+      readonly models: readonly PiModelInfo[];
     }
   /**
    * pi's conversation view for the connection's session, from
@@ -92,6 +108,7 @@ export type PiServerMessage =
 export type {
   PiClientMessage as ClientMessage,
   PiServerMessage as ServerMessage,
+  PiModelInfo as ModelInfo,
   PiToolInfo as ToolInfo
 };
 export type {

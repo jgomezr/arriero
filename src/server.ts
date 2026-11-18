@@ -12,6 +12,7 @@ import { PiHarness } from "agents/harness/pi";
 import { Lifecycle } from "agents/lifecycle";
 import { createAI } from "agents/models/pi-ai";
 import { WebSockets } from "agents/websockets";
+import type { ModelInfo } from "./protocol";
 import { PiSessionSockets } from "./sockets";
 import { createWorkspaceTools } from "./workspace";
 
@@ -40,6 +41,19 @@ const nvidiaModels = [
     maxTokens: 8192
   }))
 ];
+
+// What the model picker offers, in order: these NVIDIA models, then the
+// Workers AI ones.
+const PICKER_NVIDIA_IDS = [
+  "nvidia/nemotron-3.5-lightning-30b-a3b",
+  "nvidia/nemotron-3.5-super-vl-120b-a12b",
+  "nvidia/nemotron-3.5-bolt-e4b",
+  "minimaxai/minimax-m3.1-flash",
+  "mistralai/mistral-large-4-1t-a52b",
+  "meta/muse-glimmer-30b",
+  "google/gemma-4-31b"
+];
+const PICKER_WORKERS_AI_IDS = ["@cf/deepseek-ai/deepseek-v4.1-flash-1017"];
 
 const PREAMBLE =
   "You are a concise playground assistant. You have a durable workspace at /workspace: read, write, edit, delete, list (ls), find and grep files there, and run JavaScript modules in it with exec, which can also use git. Paths are absolute. Use tools whenever they can answer the request, and explain their results plainly.";
@@ -117,9 +131,27 @@ export class PiAgent extends DurableObject<Env> {
     }
   });
 
+  // The picker's models. Each must be on the `Models` the harness opens pi
+  // with: the NVIDIA ones come from `nvidiaModels`, the rest from `this.ai`.
+  readonly pickerModels: ModelInfo[] = [
+    ...PICKER_NVIDIA_IDS.flatMap((id) => {
+      const model = nvidiaModels.find((candidate) => candidate.id === id);
+      return model
+        ? [{ provider: model.provider, id: model.id, name: model.name }]
+        : [];
+    }),
+    ...PICKER_WORKERS_AI_IDS.map((id) => {
+      const model = this.ai(id);
+      return { provider: model.provider, id: model.id, name: model.name };
+    })
+  ];
+
   // App glue, not the harness: how this app puts sessions on a socket.
-  readonly sockets = new PiSessionSockets(this.harness, this.registry, (tag) =>
-    this.ctx.getWebSockets(tag)
+  readonly sockets = new PiSessionSockets(
+    this.harness,
+    this.registry,
+    (tag) => this.ctx.getWebSockets(tag),
+    this.pickerModels
   );
   readonly webSockets = new WebSockets(this.sockets.options());
   readonly lifecycle = Lifecycle.install(this)

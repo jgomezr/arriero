@@ -17,6 +17,7 @@ import {
 import type {
   PiClientMessage,
   PiCommandResult,
+  PiModelInfo,
   PiServerMessage
 } from "./protocol";
 
@@ -113,6 +114,7 @@ export class PiSessionSockets {
   readonly #harness: PiHarness;
   readonly #registry: RegistryReader;
   readonly #getWebSockets: (tag?: string) => WebSocket[];
+  readonly #models: readonly PiModelInfo[];
   readonly #watches = new Map<WebSocket, ConversationWatch>();
   #closed = false;
 
@@ -120,8 +122,11 @@ export class PiSessionSockets {
     harness: PiHarness,
     /** The registry pi was opened with, for the tool list sent on connect. */
     registry: RegistryReader,
-    getWebSockets: (tag?: string) => WebSocket[]
+    getWebSockets: (tag?: string) => WebSocket[],
+    /** The models a client may switch a session to, sent on connect. */
+    models: readonly PiModelInfo[] = []
   ) {
+    this.#models = models;
     this.#harness = harness;
     this.#registry = registry;
     this.#getWebSockets = getWebSockets;
@@ -169,7 +174,8 @@ export class PiSessionSockets {
       tools: this.#registry
         .snapshot()
         .tools()
-        .map(({ tool }) => ({ name: tool.name, description: tool.description }))
+        .map(({ tool }) => ({ name: tool.name, description: tool.description })),
+      models: this.#models
     });
     // The client sends `watch` next, with where its transcript ends.
   }
@@ -300,6 +306,17 @@ export class PiSessionSockets {
       case "reset":
         await handle.reset(message.handoff);
         return null;
+      case "setModel": {
+        // Only models the hello listed: the client cannot name any other.
+        const model = this.#models.find(
+          (candidate) =>
+            candidate.provider === message.provider &&
+            candidate.id === message.model
+        );
+        if (model === undefined) throw new Error("Unknown model");
+        await handle.setModel({ provider: model.provider, id: model.id });
+        return null;
+      }
       case "watch":
         if (message.from !== undefined && !isEntryId(message.from)) {
           throw new Error("Invalid from");

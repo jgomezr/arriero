@@ -6,6 +6,7 @@ import { PiCommandOutbox } from "./outbox";
 import { EMPTY_VIEW } from "./view";
 import type {
   ClientMessage,
+  ModelInfo,
   ServerMessage,
   SessionView,
   ToolInfo
@@ -17,6 +18,8 @@ type State = SessionView & {
   readonly status: ConnectionStatus;
   /** Every registered tool, from the server's hello. */
   readonly catalog: readonly ToolInfo[];
+  /** The models the session can switch to, from the server's hello. */
+  readonly models: readonly ModelInfo[];
   /** A page of earlier or missing messages is loading. */
   readonly loading: boolean;
 };
@@ -25,6 +28,7 @@ const INITIAL_STATE: State = {
   ...EMPTY_VIEW,
   status: "connecting",
   catalog: [],
+  models: [],
   loading: false
 };
 
@@ -74,7 +78,11 @@ export function usePiSession(object: string) {
       mirror.receive(message);
       switch (message.type) {
         case "hello":
-          setState((current) => ({ ...current, catalog: message.tools }));
+          setState((current) => ({
+            ...current,
+            catalog: message.tools,
+            models: message.models ?? []
+          }));
           return;
         case "error":
           setState((current) => ({ ...current, error: message.message }));
@@ -133,6 +141,18 @@ export function usePiSession(object: string) {
     [send]
   );
 
+  /** Switch this session's model; the view's `model` follows. */
+  const setModel = useCallback(
+    (model: Pick<ModelInfo, "provider" | "id">) =>
+      send({
+        type: "setModel",
+        id: crypto.randomUUID(),
+        provider: model.provider,
+        model: model.id
+      }),
+    [send]
+  );
+
   /** Run one page load of this object's mirror, showing `loading` meanwhile. */
   const load = useCallback(
     (loading: Promise<void>) => {
@@ -162,7 +182,7 @@ export function usePiSession(object: string) {
     [load, mirror]
   );
 
-  return { ...state, submit, abort, reset, loadEarlier, fillGap };
+  return { ...state, submit, abort, reset, setModel, loadEarlier, fillGap };
 }
 
 function createMirror(

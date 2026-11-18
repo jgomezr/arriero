@@ -29,12 +29,16 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Streamdown } from "streamdown";
-import type { ToolInfo, TranscriptMessage, TranscriptPart } from "./protocol";
+import type {
+  ModelInfo,
+  ToolInfo,
+  TranscriptMessage,
+  TranscriptPart
+} from "./protocol";
 import { usePiSession } from "./use-pi-session";
 import "./styles.css";
 
 const SESSION_KEY = "pi-harness-session";
-const MODEL = "@cf/deepseek-ai/deepseek-v4.1-flash-1017";
 /** How close to the bottom (px) still counts as "at the bottom". */
 const BOTTOM_THRESHOLD = 32;
 
@@ -422,6 +426,54 @@ function Sidebar({
   );
 }
 
+/** The session's model, and a menu to switch it to another one. */
+function ModelPicker({
+  models,
+  current,
+  disabled,
+  onChange
+}: {
+  models: readonly ModelInfo[];
+  current: { provider: string; modelId: string } | null;
+  disabled: boolean;
+  onChange: (model: ModelInfo) => void;
+}) {
+  const selected = models.findIndex(
+    (model) =>
+      model.provider === current?.provider && model.id === current?.modelId
+  );
+  const providers = [...new Set(models.map((model) => model.provider))];
+  return (
+    <select
+      aria-label="Model"
+      className="hidden h-7 max-w-[220px] truncate rounded-md border border-kumo-line bg-kumo-base px-2 text-xs text-kumo-default sm:block"
+      disabled={disabled || models.length === 0}
+      value={selected === -1 ? "" : String(selected)}
+      onChange={(event) => {
+        const model = models[Number(event.target.value)];
+        if (model) onChange(model);
+      }}
+    >
+      {selected === -1 ? (
+        <option value="" disabled>
+          {current?.modelId.split("/").at(-1) ?? "Model"}
+        </option>
+      ) : null}
+      {providers.map((provider) => (
+        <optgroup key={provider} label={provider}>
+          {models.map((model, index) =>
+            model.provider === provider ? (
+              <option key={model.id} value={String(index)}>
+                {model.name}
+              </option>
+            ) : null
+          )}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
 function App() {
   const [session, setSession] = useState(getSession);
   const [prompt, setPrompt] = useState("");
@@ -445,6 +497,9 @@ function App() {
     running,
     tools: running_,
     catalog,
+    models,
+    model,
+    setModel,
     queued,
     retry,
     error,
@@ -538,9 +593,12 @@ function App() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Badge variant="secondary" className="hidden sm:inline-flex">
-                {MODEL.split("/").at(-1)}
-              </Badge>
+              <ModelPicker
+                models={models}
+                current={model}
+                disabled={!connected}
+                onChange={setModel}
+              />
               <Badge variant={connected ? "success" : "secondary"}>
                 {connected
                   ? "Live"
