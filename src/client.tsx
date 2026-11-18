@@ -9,7 +9,6 @@ import {
 } from "@cloudflare/kumo";
 import {
   ArrowUpIcon,
-  BrainIcon,
   CheckCircleIcon,
   CodeIcon,
   FilePlusIcon,
@@ -39,6 +38,8 @@ import { usePiSession } from "./use-pi-session";
 import "./styles.css";
 
 const SESSION_KEY = "pi-harness-session";
+/** The app's logo, served from `public/`. */
+const LOGO = "/arriero.png";
 /** How close to the bottom (px) still counts as "at the bottom". */
 const BOTTOM_THRESHOLD = 32;
 
@@ -48,21 +49,21 @@ type EntryMessage = Exclude<TranscriptMessage, { role: "gap" }>;
 const SUGGESTIONS = [
   {
     icon: <FilePlusIcon size={15} />,
-    label: "Write a file",
+    label: "Escribir un archivo",
     value:
-      "Write a haiku about Durable Objects to /workspace/haiku.txt, then read it back."
+      "Escribe en /workspace/bitacora.md la bitácora de hoy con tres líneas (qué avanzó, qué evité, qué no dependía de mí) y luego léela."
   },
   {
     icon: <CodeIcon size={15} />,
-    label: "Run JavaScript",
+    label: "Ejecutar JavaScript",
     value:
-      "Use exec to run JavaScript that lists /workspace and returns the size of each file."
+      "Usa exec para ejecutar JavaScript que liste /workspace y devuelva el tamaño de cada archivo."
   },
   {
     icon: <GitBranchIcon size={15} />,
-    label: "Clone a repo",
+    label: "Clonar un repo",
     value:
-      "Clone https://github.com/octocat/Hello-World into /workspace/hello, then show its git log."
+      "Clona https://github.com/octocat/Hello-World en /workspace/hello y muéstrame su git log."
   }
 ] satisfies Array<{ icon: ReactNode; label: string; value: string }>;
 
@@ -89,7 +90,7 @@ function ModeToggle() {
     <Button
       variant="ghost"
       shape="square"
-      aria-label="Toggle theme"
+      aria-label="Cambiar tema"
       onClick={() => setMode((value) => (value === "light" ? "dark" : "light"))}
       icon={mode === "light" ? <MoonIcon size={16} /> : <SunIcon size={16} />}
     />
@@ -122,11 +123,11 @@ function ToolCallCard({
         <span className="min-w-0 flex-1 truncate text-xs font-semibold">
           {part.name}
         </span>
-        <Badge variant="secondary">{running ? "Running" : "Called"}</Badge>
+        <Badge variant="secondary">{running ? "En curso" : "Llamada"}</Badge>
       </summary>
       <div className="border-t border-kumo-line px-3 py-3">
         <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-kumo-inactive">
-          Arguments
+          Argumentos
         </p>
         <JsonBlock value={part.arguments} />
       </div>
@@ -157,14 +158,14 @@ function ToolResultCard({
           {text ? <span className="ml-2 text-kumo-subtle">{text}</span> : null}
         </span>
         <Badge variant={part.error ? "destructive" : "secondary"}>
-          {part.error ? "Failed" : "Done"}
+          {part.error ? "Falló" : "Listo"}
         </Badge>
       </summary>
       <div className="space-y-3 border-t border-kumo-line px-3 py-3">
         {text ? (
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-kumo-inactive">
-              Result
+              Resultado
             </p>
             <JsonBlock value={text} />
           </div>
@@ -174,7 +175,7 @@ function ToolResultCard({
             <img
               key={index}
               src={`data:${image.mimeType};base64,${image.data}`}
-              alt={`${part.name} output`}
+              alt={`Salida de ${part.name}`}
               className="max-w-full rounded-lg"
             />
           ) : null
@@ -182,7 +183,7 @@ function ToolResultCard({
         {part.details !== undefined ? (
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-kumo-inactive">
-              Details
+              Detalles
             </p>
             <JsonBlock value={part.details} />
           </div>
@@ -260,9 +261,7 @@ function AssistantMessage({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-kumo-brand text-white">
-        <BrainIcon size={17} weight="bold" />
-      </div>
+      <img src={LOGO} alt="" className="mt-0.5 size-8 shrink-0" />
       <div className="min-w-0 flex-1 space-y-3">
         {message.parts.map((part, index) => (
           <AssistantPart
@@ -309,8 +308,8 @@ function SummaryNotice({ message }: { message: EntryMessage }) {
   return (
     <details className="group text-center text-xs text-kumo-inactive">
       <summary className="cursor-pointer list-none hover:text-kumo-subtle">
-        Earlier messages summarized
-        <span className="group-open:hidden"> · Show summary</span>
+        Mensajes anteriores resumidos
+        <span className="group-open:hidden"> · Ver resumen</span>
       </summary>
       <div className="mt-2 rounded-xl border border-kumo-line bg-kumo-base px-4 py-3 text-left">
         <Streamdown
@@ -371,7 +370,7 @@ function Message({
             loading={loading}
             onClick={() => onFillGap?.(message)}
           >
-            Load missing messages
+            Cargar mensajes faltantes
           </Button>
         </div>
       );
@@ -390,16 +389,16 @@ function Sidebar({
   return (
     <aside
       className="flex min-h-0 flex-col border-l border-kumo-line bg-kumo-base"
-      aria-label="Tools"
+      aria-label="Herramientas"
     >
       <div className="flex h-[68px] shrink-0 items-center justify-between gap-2 border-b border-kumo-line px-4">
         <Text size="sm" bold>
-          Tools
+          Herramientas
         </Text>
         <Button
           variant="ghost"
           shape="square"
-          aria-label="Close tools"
+          aria-label="Cerrar herramientas"
           onClick={onClose}
           icon={<XIcon size={16} />}
         />
@@ -445,7 +444,7 @@ function ModelPicker({
   const providers = [...new Set(models.map((model) => model.provider))];
   return (
     <select
-      aria-label="Model"
+      aria-label="Modelo"
       className="hidden h-7 max-w-[220px] truncate rounded-md border border-kumo-line bg-kumo-base px-2 text-xs text-kumo-default sm:block"
       disabled={disabled || models.length === 0}
       value={selected === -1 ? "" : String(selected)}
@@ -456,7 +455,7 @@ function ModelPicker({
     >
       {selected === -1 ? (
         <option value="" disabled>
-          {current?.modelId.split("/").at(-1) ?? "Model"}
+          {current?.modelId.split("/").at(-1) ?? "Modelo"}
         </option>
       ) : null}
       {providers.map((provider) => (
@@ -578,17 +577,15 @@ function App() {
           : "grid-cols-1"
       }`}
     >
-      <section className="flex min-h-0 min-w-0 flex-col" aria-label="Chat">
+      <section className="flex min-h-0 min-w-0 flex-col" aria-label="Conversación">
         <header className="shrink-0 border-b border-kumo-line bg-kumo-base">
           <div className="mx-auto flex h-[68px] max-w-3xl items-center justify-between gap-3 px-5">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-kumo-brand text-white">
-                <BrainIcon size={20} weight="bold" />
-              </div>
+              <img src={LOGO} alt="" className="size-9 shrink-0" />
               <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold">Pi harness</h1>
+                <h1 className="truncate text-base font-semibold">Arriero</h1>
                 <p className="truncate text-xs text-kumo-subtle">
-                  Session <code>{session.slice(0, 8)}</code>
+                  Sesión <code>{session.slice(0, 8)}</code>
                 </p>
               </div>
             </div>
@@ -601,15 +598,15 @@ function App() {
               />
               <Badge variant={connected ? "success" : "secondary"}>
                 {connected
-                  ? "Live"
+                  ? "En línea"
                   : status === "connecting"
-                    ? "Connecting"
-                    : "Reconnecting"}
+                    ? "Conectando"
+                    : "Reconectando"}
               </Badge>
               <Button
                 variant="ghost"
                 shape="square"
-                aria-label="Tools"
+                aria-label="Herramientas"
                 aria-expanded={toolsOpen}
                 onClick={() => setToolsOpen((open) => !open)}
                 icon={<WrenchIcon size={16} />}
@@ -617,7 +614,7 @@ function App() {
               <Button
                 variant="ghost"
                 shape="square"
-                aria-label="New session"
+                aria-label="Nueva sesión"
                 onClick={newSession}
                 icon={<PlusIcon size={16} />}
               />
@@ -635,9 +632,9 @@ function App() {
             {empty ? (
               <div className="py-10 sm:py-16">
                 <Empty
-                  icon={<BrainIcon size={32} />}
-                  title="Ask Pi something that needs a tool"
-                  description="Tool calls and results stream in as they happen."
+                  icon={<img src={LOGO} alt="" className="size-12" />}
+                  title="¿Qué carga sale hoy?"
+                  description="Dile al Arriero cuál es el tramo. Las herramientas que use se ven aquí mientras trabaja."
                 />
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
                   {SUGGESTIONS.map((suggestion) => (
@@ -665,7 +662,7 @@ function App() {
                   loading={loading}
                   onClick={showEarlier}
                 >
-                  Load earlier messages
+                  Cargar mensajes anteriores
                 </Button>
               </div>
             ) : null}
@@ -686,17 +683,15 @@ function App() {
 
             {running && !live ? (
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-kumo-brand text-white">
-                  <BrainIcon size={17} weight="bold" />
-                </div>
+                <img src={LOGO} alt="" className="mt-0.5 size-8 shrink-0" />
                 <Surface className="rounded-xl px-4 py-3 ring ring-kumo-line">
                   <div className="flex items-center gap-2 text-sm text-kumo-subtle">
                     <GearIcon size={15} className="animate-spin" />
                     {retry
-                      ? `Retrying: ${retry.error}`
+                      ? `Reintentando: ${retry.error}`
                       : runningTools.length > 0
-                        ? `Running ${runningTools.join(", ")}`
-                        : "Waiting for the model"}
+                        ? `Ejecutando ${runningTools.join(", ")}`
+                        : "Esperando al modelo"}
                   </div>
                 </Surface>
               </div>
@@ -715,7 +710,7 @@ function App() {
 
             {queued > 0 ? (
               <p className="ml-11 text-xs text-kumo-subtle">
-                {queued} queued behind this run
+                {queued} en cola detrás de esta tarea
               </p>
             ) : null}
 
@@ -752,10 +747,10 @@ function App() {
                 }}
                 placeholder={
                   running
-                    ? "Queue a follow-up, or steer the running turn"
-                    : "Ask Pi to use a tool"
+                    ? "Deja otro mensaje en cola o redirige la tarea en curso"
+                    : "Escríbele al Arriero"
                 }
-                aria-label="Message Pi"
+                aria-label="Mensaje para el Arriero"
                 disabled={!connected}
                 rows={2}
                 className="flex-1 !bg-transparent !shadow-none !ring-0 !outline-none focus:!ring-0"
@@ -766,17 +761,17 @@ function App() {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    aria-label="Steer"
+                    aria-label="Redirigir"
                     disabled={prompt.trim() === ""}
                     onClick={() => submit("steer")}
                   >
-                    Steer
+                    Redirigir
                   </Button>
                   <Button
                     type="button"
                     variant="secondary"
                     shape="square"
-                    aria-label="Stop"
+                    aria-label="Detener"
                     onClick={abort}
                     icon={<StopIcon size={18} weight="fill" />}
                   />
@@ -786,7 +781,7 @@ function App() {
                   type="submit"
                   variant="primary"
                   shape="square"
-                  aria-label="Send message"
+                  aria-label="Enviar mensaje"
                   disabled={!connected || prompt.trim() === ""}
                   icon={<PaperPlaneRightIcon size={18} />}
                   className="mb-0.5"
@@ -796,7 +791,7 @@ function App() {
           </form>
           <div className="flex items-center justify-center gap-2 px-5 py-3">
             <span className="hidden text-[10px] text-kumo-inactive sm:inline">
-              Enter to send · Shift+Enter for a new line
+              Enter para enviar · Shift+Enter para nueva línea
             </span>
             <span className="hidden text-kumo-line sm:inline">·</span>
             <PoweredByCloudflare href="https://developers.cloudflare.com/agents/" />
