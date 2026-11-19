@@ -3,14 +3,12 @@ import {
   Button,
   Empty,
   InputArea,
-  PoweredByCloudflare,
   Surface,
   Text
 } from "@cloudflare/kumo";
 import {
   ArrowUpIcon,
   CheckCircleIcon,
-  CodeIcon,
   FilePlusIcon,
   GearIcon,
   GitBranchIcon,
@@ -34,6 +32,7 @@ import type {
   TranscriptMessage,
   TranscriptPart
 } from "./protocol";
+import { fraseAlAzar, type Frase } from "./frases";
 import { usePiSession } from "./use-pi-session";
 import "./styles.css";
 
@@ -48,22 +47,20 @@ type EntryMessage = Exclude<TranscriptMessage, { role: "gap" }>;
 
 const SUGGESTIONS = [
   {
-    icon: <FilePlusIcon size={15} />,
-    label: "Escribir un archivo",
-    value:
-      "Escribe en /workspace/bitacora.md la bitácora de hoy con tres líneas (qué avanzó, qué evité, qué no dependía de mí) y luego léela."
-  },
-  {
-    icon: <CodeIcon size={15} />,
-    label: "Ejecutar JavaScript",
-    value:
-      "Usa exec para ejecutar JavaScript que liste /workspace y devuelva el tamaño de cada archivo."
-  },
-  {
     icon: <GitBranchIcon size={15} />,
-    label: "Clonar un repo",
+    label: "Revisar mis frentes",
     value:
-      "Clona https://github.com/octocat/Hello-World en /workspace/hello y muéstrame su git log."
+      "Revisemos mis frentes abiertos: cómo van contra su fecha de cierre y cuál estoy abandonando."
+  },
+  {
+    icon: <FilePlusIcon size={15} />,
+    label: "Tengo una idea nueva",
+    value: "Tengo una idea nueva y quiero saber si la abro o va al carriel."
+  },
+  {
+    icon: <CheckCircleIcon size={15} />,
+    label: "Cerrar el día",
+    value: "Cerremos el día: ayúdame a escribir la bitácora."
   }
 ] satisfies Array<{ icon: ReactNode; label: string; value: string }>;
 
@@ -425,6 +422,24 @@ function Sidebar({
   );
 }
 
+/** Una frase estoica, con su autor y su obra. */
+function FraseEstoica({
+  frase,
+  className = ""
+}: {
+  frase: Frase;
+  className?: string;
+}) {
+  return (
+    <figure className={className}>
+      <blockquote className="italic text-kumo-subtle">“{frase.texto}”</blockquote>
+      <figcaption className="mt-1 text-[11px] text-kumo-inactive">
+        {frase.autor}, {frase.obra}
+      </figcaption>
+    </figure>
+  );
+}
+
 /** The session's model, and a menu to switch it to another one. */
 function ModelPicker({
   models,
@@ -473,9 +488,11 @@ function ModelPicker({
   );
 }
 
-function App() {
+function App({ token }: { token?: string }) {
   const [session, setSession] = useState(getSession);
   const [prompt, setPrompt] = useState("");
+  // La frase de la pantalla inicial y de la espera.
+  const [frase, setFrase] = useState(() => fraseAlAzar());
   const [toolsOpen, setToolsOpen] = useState(
     () => window.matchMedia("(min-width: 1100px)").matches
   );
@@ -506,8 +523,16 @@ function App() {
     abort,
     loadEarlier,
     fillGap
-  } = usePiSession(session);
+  } = usePiSession(session, token);
   const runningTools = running_.map((tool) => tool.name);
+
+  // Cada espera y cada sesión nueva traen otra frase.
+  useEffect(() => {
+    if (running) setFrase((anterior) => fraseAlAzar(anterior));
+  }, [running]);
+  useEffect(() => {
+    setFrase((anterior) => fraseAlAzar(anterior));
+  }, [session]);
   const newestId = messages.at(-1)?.id;
   const oldestId = messages[0]?.id;
 
@@ -636,6 +661,10 @@ function App() {
                   title="¿Qué carga sale hoy?"
                   description="Dile al Arriero cuál es el tramo. Las herramientas que use se ven aquí mientras trabaja."
                 />
+                <FraseEstoica
+                  frase={frase}
+                  className="mx-auto mt-6 max-w-md text-center text-sm"
+                />
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
                   {SUGGESTIONS.map((suggestion) => (
                     <Button
@@ -693,6 +722,7 @@ function App() {
                         ? `Ejecutando ${runningTools.join(", ")}`
                         : "Esperando al modelo"}
                   </div>
+                  <FraseEstoica frase={frase} className="mt-3 max-w-md text-sm" />
                 </Surface>
               </div>
             ) : null}
@@ -789,12 +819,10 @@ function App() {
               )}
             </div>
           </form>
-          <div className="flex items-center justify-center gap-2 px-5 py-3">
+          <div className="flex items-center justify-center px-5 py-3">
             <span className="hidden text-[10px] text-kumo-inactive sm:inline">
               Enter para enviar · Shift+Enter para nueva línea
             </span>
-            <span className="hidden text-kumo-line sm:inline">·</span>
-            <PoweredByCloudflare href="https://developers.cloudflare.com/agents/" />
           </div>
         </div>
       </section>
@@ -810,6 +838,83 @@ function App() {
   );
 }
 
+const TOKEN_KEY = "arriero-token";
+
+/**
+ * La puerta: pregunta al servidor si hace falta token. Si lo pide, lo
+ * solicita una vez y lo guarda en este navegador.
+ */
+function Entrada() {
+  const [token, setToken] = useState(
+    () => localStorage.getItem(TOKEN_KEY) ?? ""
+  );
+  const [estado, setEstado] = useState<"revisando" | "abierto" | "pedir">(
+    "revisando"
+  );
+  const [borrador, setBorrador] = useState("");
+  const [fallo, setFallo] = useState(false);
+  // Cada envío del formulario vuelve a revisar, aunque el token no cambie.
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let vigente = true;
+    setEstado("revisando");
+    fetch("/api/check", {
+      headers: token ? { authorization: `Bearer ${token}` } : {}
+    })
+      .then((response) => {
+        if (!vigente) return;
+        if (response.ok) {
+          setEstado("abierto");
+        } else {
+          if (token) setFallo(true);
+          setEstado("pedir");
+        }
+      })
+      // Sin red no se puede saber: se intenta entrar y el chat muestra el estado.
+      .catch(() => vigente && setEstado("abierto"));
+    return () => {
+      vigente = false;
+    };
+  }, [token, intento]);
+
+  if (estado === "abierto") return <App token={token || undefined} />;
+  if (estado === "revisando") return null;
+  return (
+    <div className="flex h-dvh items-center justify-center bg-kumo-elevated px-5 text-kumo-default">
+      <form
+        className="w-full max-w-sm space-y-4 rounded-xl border border-kumo-line bg-kumo-base p-6 text-center"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const valor = borrador.trim();
+          if (valor === "") return;
+          localStorage.setItem(TOKEN_KEY, valor);
+          setFallo(false);
+          setToken(valor);
+          setIntento((n) => n + 1);
+        }}
+      >
+        <img src={LOGO} alt="" className="mx-auto size-14" />
+        <h1 className="text-base font-semibold">Arriero</h1>
+        <p className="text-sm text-kumo-subtle">
+          {fallo ? "Ese token no sirve. Prueba otra vez." : "Escribe el token de acceso."}
+        </p>
+        <input
+          type="password"
+          autoFocus
+          value={borrador}
+          onChange={(event) => setBorrador(event.target.value)}
+          aria-label="Token de acceso"
+          className="w-full rounded-lg border border-kumo-line bg-kumo-base px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-kumo-ring"
+        />
+        <Button type="submit" variant="primary" className="w-full">
+          Entrar
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element");
-createRoot(root).render(<App />);
+createRoot(root).render(<Entrada />);

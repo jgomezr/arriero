@@ -42,7 +42,7 @@ const INITIAL_STATE: State = {
  * answer the socket never delivered; the harness deduplicates them by
  * operation id, so each runs once.
  */
-export function usePiSession(object: string) {
+export function usePiSession(object: string, token?: string) {
   const [state, setState] = useState<State>(INITIAL_STATE);
   // Unanswered submits, sent again each time the socket opens.
   const [outbox] = useState(() => new PiCommandOutbox());
@@ -62,6 +62,8 @@ export function usePiSession(object: string) {
   const agent = useAgent({
     agent: "pi-agent",
     name: object,
+    // El servidor pide el token en la conexión cuando está configurado.
+    ...(token ? { query: { token } } : {}),
     onOpen: () => setState((current) => ({ ...current, status: "open" })),
     onClose: () => {
       mirror.close();
