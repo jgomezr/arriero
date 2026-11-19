@@ -10,7 +10,8 @@
     "deploy": "vite build && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "types": "wrangler types env.d.ts --include-runtime false",
-    "test": "vitest run --config src/tests/vitest.config.ts"
+    "test": "vitest run --config src/tests/vitest.config.ts",
+    "cli": "node cli/arriero.mjs"
   },
   "dependencies": {
     "@cloudflare/computer": "^0.10.0",
@@ -43,5 +44,8 @@
     "vite": "^8.1.6",
     "vitest": "4.1.11",
     "wrangler": "^4.145.0"
+  },
+  "bin": {
+    "arriero": "cli/arriero.mjs"
   }
 }
